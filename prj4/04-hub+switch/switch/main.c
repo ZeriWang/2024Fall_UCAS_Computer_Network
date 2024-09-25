@@ -20,10 +20,23 @@
 void handle_packet(iface_info_t *iface, char *packet, int len)
 {
 	// TODO: implement the packet forwarding process here
-	fprintf(stdout, "TODO: implement the packet forwarding process here.\n");
+	// fprintf(stdout, "TODO: implement the packet forwarding process here.\n");
 
 	struct ether_header *eh = (struct ether_header *)packet;
-	log(DEBUG, "the dst mac address is " ETHER_STRING ".\n", ETHER_FMT(eh->ether_dhost));
+	// log(DEBUG, "the dst mac address is " ETHER_STRING ".\n", ETHER_FMT(eh->ether_dhost));
+
+	iface_info_t * dest_iface = lookup_port(eh->ether_dhost);
+	if (dest_iface) 
+	{
+		// log(DEBUG, "Send this packet to %s.", dest_iface->name);
+		iface_send_packet(dest_iface, packet, len);
+	} else 
+	{
+		// log(DEBUG, "Broadcast this packet.");
+		broadcast_packet(iface, packet, len);
+	}
+
+	insert_mac_port(eh->ether_shost, iface);
 
 	free(packet);
 }

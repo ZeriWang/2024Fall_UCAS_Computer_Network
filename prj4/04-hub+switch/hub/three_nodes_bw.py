@@ -42,10 +42,14 @@ class BroadcastTopo(Topo):
         h2 = self.addHost('h2')
         h3 = self.addHost('h3')
         b1 = self.addHost('b1')
+        b2 = self.addHost('b2')
+        b3 = self.addHost('b3')
 
-        self.addLink(h1, b1, bw=20)
-        self.addLink(h2, b1, bw=10)
-        self.addLink(h3, b1, bw=10)
+        self.addLink(h1, b1, bw=10)
+        self.addLink(h2, b2, bw=10)
+        self.addLink(b1, b2, bw=20)
+        self.addLink(b2, b3, bw=20)
+        self.addLink(b3, b1, bw=20)
 
 if __name__ == '__main__':
     check_scripts()
@@ -53,13 +57,15 @@ if __name__ == '__main__':
     topo = BroadcastTopo()
     net = Mininet(topo = topo, link = TCLink, controller = None) 
 
-    h1, h2, h3, b1 = net.get('h1', 'h2', 'h3', 'b1')
+    h1, h2, h3, b1, b2, b3 = net.get('h1', 'h2', 'h3', 'b1', 'b2', 'b3')
     h1.cmd('ifconfig h1-eth0 10.0.0.1/8')
     h2.cmd('ifconfig h2-eth0 10.0.0.2/8')
     h3.cmd('ifconfig h3-eth0 10.0.0.3/8')
     clearIP(b1)
+    clearIP(b2)
+    clearIP(b3)
 
-    for h in [ h1, h2, h3, b1 ]:
+    for h in [ h1, h2, h3, b1, b2, b3 ]:
         h.cmd('./scripts/disable_offloading.sh')
         h.cmd('./scripts/disable_ipv6.sh')
 
