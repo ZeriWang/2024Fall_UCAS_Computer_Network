@@ -39,11 +39,25 @@ class RingTopo(Topo):
         b2 = self.addHost('b2')
         b3 = self.addHost('b3')
         b4 = self.addHost('b4')
+        b5 = self.addHost('b5')
+        b6 = self.addHost('b6')
+        b7 = self.addHost('b7')
+        b8 = self.addHost('b8')
 
         self.addLink(b1, b2)
         self.addLink(b1, b3)
-        self.addLink(b2, b4)
+        self.addLink(b1, b4)
+        self.addLink(b1, b5)
+        self.addLink(b1, b6)
+        self.addLink(b1, b7)
+        self.addLink(b1, b8)
+        self.addLink(b2, b3)
         self.addLink(b3, b4)
+        self.addLink(b4, b5)
+        self.addLink(b5, b6)
+        self.addLink(b6, b7)
+        self.addLink(b7, b8)
+        self.addLink(b8, b2)
 
 if __name__ == '__main__':
     check_scripts()
@@ -51,7 +65,7 @@ if __name__ == '__main__':
     topo = RingTopo()
     net = Mininet(topo = topo, controller = None) 
 
-    for idx in range(4):
+    for idx in range(8):
         name = 'b' + str(idx+1)
         node = net.get(name)
         clearIP(node)
@@ -65,7 +79,7 @@ if __name__ == '__main__':
 
             node.setMAC(mac, intf = intf)
 
-        # node.cmd('./stp > %s-output.txt 2>&1 &' % name)
+        node.cmd('./stp > %s-output.txt 2>&1 &' % name)
         # node.cmd('./stp-reference > %s-output.txt 2>&1 &' % name)
 
     net.start()

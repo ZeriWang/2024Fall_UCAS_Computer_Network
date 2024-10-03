@@ -138,11 +138,149 @@ void *stp_timer_routine(void *arg)
 	return NULL;
 }
 
+// judge whether port's config is superior than another
+static bool config_compare(stp_port_t *p,
+				u64 designed_root, u32 root_path_cost,
+				u64 switch_id, u16 port_id)
+{
+    // 比较端口的 designated_root 和传入的 designed_root
+    if(p->designated_root < designed_root){
+        return true; // 如果端口的 designated_root 更小，返回 true
+    }
+    else if(p->designated_root > designed_root){
+        return false; // 如果端口的 designated_root 更大，返回 false
+    }
+    else{
+        // 如果 designated_root 相等，比较 designated_cost 和传入的 root_path_cost
+        if(p->designated_cost < root_path_cost){
+            return true; // 如果端口的 designated_cost 更小，返回 true
+        }
+        else if(p->designated_cost > root_path_cost){
+            return false; // 如果端口的 designated_cost 更大，返回 false
+        }
+        else{
+            // 如果 designated_cost 也相等，比较 designated_switch 和传入的 switch_id
+            if(p->designated_switch < switch_id){
+                return true; // 如果端口的 designated_switch 更小，返回 true
+            }
+            else if(p->designated_switch > switch_id){
+                return false; // 如果端口的 designated_switch 更大，返回 false
+            }
+            else{
+                // 如果 designated_switch 也相等，比较 designated_port 和传入的 port_id
+                if(p->designated_port < port_id){
+                    return true; // 如果端口的 designated_port 更小，返回 true
+                }
+                else if(p->designated_port > port_id){
+                    return false; // 如果端口的 designated_port 更大，返回 false
+                }
+                else{
+                    return false; // 如果所有字段都相等，返回 false
+                }
+            }
+        }
+    }
+}
+
+// find root port
+static stp_port_t *find_root_port(stp_t *stp)
+{
+	stp_port_t *root_port = NULL;
+	stp_port_t *port_entry; 
+
+	for (int i = 0; i < stp->nports; i++) {
+		port_entry = &stp->ports[i];
+
+		if (!stp_port_is_designated(port_entry)) {
+			if(root_port){
+				if(config_compare(port_entry, root_port->designated_root, root_port->designated_cost, root_port->designated_switch, root_port->port_id)){
+					root_port = port_entry;
+				}
+			}
+			else{
+				root_port = port_entry;
+			}
+		}
+	}
+			
+	return root_port;
+}
+
 static void stp_handle_config_packet(stp_t *stp, stp_port_t *p,
 		struct stp_config *config)
 {
 	// TODO: handle config packet here
-	fprintf(stdout, "TODO: handle config packet here.\n");
+	// fprintf(stdout, "TODO: handle config packet here.\n");
+
+	bool config_superior;
+
+	u64 designed_root = ntohll(config->root_id);
+	u32 root_path_cost = ntohl(config->root_path_cost);
+	u64 switch_id = ntohll(config->switch_id);
+	u16 port_id = ntohs(config->port_id);
+
+	int is_root_before = stp_is_root_switch(stp);
+
+	config_superior = config_compare(p, designed_root, root_path_cost, switch_id, port_id);
+
+	if(config_superior){
+		// p is the designated port, send config
+		if (stp_port_is_designated(p)) {
+			stp_port_send_config(p);
+		}
+	}
+	else{
+		//p's config is replaced by opposite config
+		//p will not be designated port in this time
+		p->designated_root = designed_root;
+		p->designated_cost = root_path_cost;
+		p->designated_switch = switch_id;
+		p->designated_port = port_id;
+
+		//update stp state
+		stp_port_t *root_port = find_root_port(stp);
+
+		if(root_port){
+			stp->root_port = root_port;
+			stp->designated_root = root_port->designated_root;
+			stp->root_path_cost = root_port->designated_cost + root_port->path_cost;
+		}
+		else{
+			stp->root_port = NULL;
+			stp->designated_root = stp->switch_id;
+			stp->root_path_cost = 0;
+		}
+		
+		//find all non-designated -> designated
+		for (int i = 0; i < stp->nports; i++) {
+			stp_port_t* port_entry = &stp->ports[i];
+			if (!stp_port_is_designated(port_entry)) {
+				if(root_port){
+					if(!config_compare(port_entry, stp->designated_root, stp->root_path_cost, stp->switch_id, port_entry->port_id)){
+						port_entry->designated_switch = stp->switch_id;
+						port_entry->designated_port = port_entry->port_id;
+					}
+				}
+			}
+		}
+
+		//update designed ports'config of designated_root & designated_cost
+		for (int i = 0; i < stp->nports; i++) {
+			stp_port_t* port_entry = &stp->ports[i];
+			if (stp_port_is_designated(port_entry)) {
+				port_entry->designated_root = stp->designated_root;
+				port_entry->designated_cost = stp->root_path_cost;
+			}
+		}
+
+		//only root switch can always send config
+		if (is_root_before && !stp_is_root_switch(stp)){
+			stp_stop_timer(&stp->hello_timer);
+		}
+
+		//send update config to other stps' port
+		stp_send_config(stp);
+	}
 }
 
 static void *stp_dump_state(void *arg)
